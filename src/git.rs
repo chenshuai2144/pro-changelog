@@ -116,7 +116,7 @@ fn sort_tags<'a>(tags: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
 /// Get the latest two commits for the range.
 pub fn get_commit_range<'r>(
     repo: &'r Repository,
-    packageName: &str,
+    package_name: &str,
 ) -> crate::Result<CommitRange<'r>> {
     let tag_list = repo.tag_names(None).context(crate::ErrorKind::Git)?;
 
@@ -124,7 +124,7 @@ pub fn get_commit_range<'r>(
         tag_list
             .into_iter()
             .filter_map(|x| x)
-            .filter(|x| x.starts_with(packageName)),
+            .filter(|x| x.starts_with(package_name)),
     );
     let len = tags.len();
 
@@ -139,10 +139,9 @@ pub fn get_commit_range<'r>(
     let (start, end) = match (start_str, end) {
         (start, None) => {
             let start = repo.revparse_single(start).context(crate::ErrorKind::Git)?;
-            let mut revwalk = repo.revwalk().context(crate::ErrorKind::Git)?;
-            revwalk.push(start.id()).context(crate::ErrorKind::Git)?;
-            revwalk.set_sorting(git2::Sort::REVERSE);
-            let oid = revwalk
+            let mut reveals = repo.revwalk().context(crate::ErrorKind::Git)?;
+            reveals.push(start.id()).context(crate::ErrorKind::Git)?;
+            let oid = reveals
                 .nth(0)
                 .ok_or(crate::ErrorKind::Git)?
                 .context(crate::ErrorKind::Git)?;
@@ -204,6 +203,7 @@ pub fn all_commits(path: &str, package_name: &str) -> crate::Result<(Tag, Vec<Co
             break;
         }
         let message = commit.message().ok_or(crate::ErrorKind::Git)?.to_string();
+
         let hash = format!("{}", commit.id());
         let author = commit.author().name().map(|name| name.to_owned());
         let timestamp = commit.time().seconds();

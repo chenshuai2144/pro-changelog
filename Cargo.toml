@@ -1,0 +1,15 @@
+[package]
+name = "pro-changelog"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+git2 = "0.14"
+semver = "0.9.0"
+serde = "1.0.104"
+failure = "0.1.6"
+exitfailure = "0.5.1"
+chrono = "0.4.10"
+reqwest="0.9.18"

@@ -2,7 +2,7 @@
 use failure::ResultExt;
 use git2::{self, DiffStatsFormat, Repository};
 use semver::Version;
-use std::{fmt::Result, str};
+use std::str;
 
 #[derive(Clone, Debug)]
 pub struct TagAndVersion {
@@ -23,6 +23,12 @@ impl Tag {
     pub fn name(&self) -> &Option<String> {
         &self.name
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct TagAndCommit {
+    pub tag: Tag,
+    pub commit_list: Vec<Commit>,
 }
 
 /// A commit range for a tagged release
@@ -118,7 +124,36 @@ fn sort_tags<'a>(tags: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
 
     tags.sort_by(|(_, a), (_, b)| a.cmp(b));
 
-    tags.into_iter().map(|(tag, _)| tag).collect()
+    let tags = tags.into_iter().map(|(tag, _)| tag).collect();
+
+    tags
+}
+
+fn get_tag_list<'a>(repo: &'a Repository, package_name: &'a str) -> Vec<String> {
+    let mut tag_list = repo
+        .tag_names(None)
+        .context(crate::ErrorKind::Git)
+        .unwrap()
+        .into_iter()
+        .filter_map(|x| x)
+        .filter(|x| x.starts_with(package_name))
+        .filter_map(|tag| {
+            Version::parse(&get_version(tag).to_owned().version)
+                .ok()
+                .map(|version| (tag.to_string(), version))
+        })
+        .collect::<Vec<_>>();
+
+    tag_list.sort_by(|(_, a), (_, b)| a.cmp(b));
+
+    let tags = tag_list
+        .iter()
+        .map(|(tag, _)| tag.clone())
+        .collect::<Vec<String>>();
+
+    tag_list.clear();
+
+    tags
 }
 
 /// 获取commit 的范围，默认获取的是 latest
@@ -185,29 +220,26 @@ pub fn latest_diff(path: &str, package_name: &str) -> crate::Result<String> {
     let end = commit_range.end;
     Ok(diff(&repo, start, end)?)
 }
+
 pub fn get_all_tag_range<'r>(
     repo: &'r Repository,
     package_name: &str,
 ) -> crate::Result<Vec<CommitRange<'r>>> {
     let mut cr_list: Vec<CommitRange> = vec![];
-    let tag_list = repo.tag_names(None).context(crate::ErrorKind::Git)?;
 
-    let tags = sort_tags(
-        tag_list
-            .into_iter()
-            .filter_map(|x| x)
-            .filter(|x| x.starts_with(package_name)),
-    );
+    let tags = get_tag_list(repo, package_name);
 
     let len = tags.len();
 
-    let mut index = 0;
-
     while cr_list.len() < len - 1 {
+        let cr_list_len = cr_list.len();
         let (start, end) = match len {
             0 => return Err(crate::ErrorKind::NoTags.into()),
-            1 => (tags.get(len - index - 1), None),
-            _ => (tags.get(len - index - 1), tags.get(len - index - 2)),
+            1 => (tags.get(len - cr_list_len - 1), None),
+            _ => (
+                tags.get(len - cr_list_len - 1),
+                tags.get(len - cr_list_len - 2),
+            ),
         };
 
         // Value has to be `Some()` here.
@@ -242,34 +274,15 @@ pub fn get_all_tag_range<'r>(
             },
         };
         cr_list.insert(cr_list.len(), cr);
-        index = index + 1;
     }
 
     Ok(cr_list)
 }
 
-pub fn full_diff(path: &str, package_name: &str) -> crate::Result<Vec<String>> {
-    let repo = Repository::open(path).context(crate::ErrorKind::Git)?;
-    let commit_range_list = get_all_tag_range(&repo, package_name)?;
-    let mut diff_list: Vec<String> = vec![];
-    let mut index = 0;
-    for commit_range in commit_range_list {
-        let start = commit_range.start;
-        let end = commit_range.end;
-        let diff_str = diff(&repo, start, end)?;
-        diff_list.insert(index, diff_str);
-        index = index + 1;
-    }
-
-    Ok(diff_list)
-}
-/// Get all commits for a path.
-pub fn latest_commits(path: &str, package_name: &str) -> crate::Result<(Tag, Vec<Commit>)> {
-    let repo = Repository::open(path).context(crate::ErrorKind::Git)?;
-
-    let commit_range = get_commit_latest_range(&repo, package_name)?;
-
-    let tag = commit_range.latest_tag;
+pub fn get_commit_list_by_commit_range(
+    repo: &Repository,
+    commit_range: CommitRange,
+) -> crate::Result<Vec<Commit>> {
     let start = commit_range.start;
     let end = commit_range.end;
 
@@ -302,61 +315,36 @@ pub fn latest_commits(path: &str, package_name: &str) -> crate::Result<(Tag, Vec
         });
     }
 
+    Ok(commits)
+}
+
+/// Get all commits for a path.
+pub fn latest_commits(repo: &Repository, package_name: &str) -> crate::Result<(Tag, Vec<Commit>)> {
+    let commit_range = get_commit_latest_range(&repo, package_name)?;
+
+    let tag = commit_range.clone().latest_tag;
+
+    let commits = get_commit_list_by_commit_range(&repo, commit_range).unwrap();
+
     Ok((tag, commits))
 }
 
-pub struct TagAndCommit {
-    pub tag: Tag,
-    pub commit_list: Vec<Commit>,
-}
-
-pub fn full_commits(path: &str, package_name: &str) -> crate::Result<Vec<TagAndCommit>> {
-    let repo = Repository::open(path).context(crate::ErrorKind::Git)?;
+pub fn full_commits(repo: &Repository, package_name: &str) -> crate::Result<Vec<TagAndCommit>> {
     let commit_range_list = get_all_tag_range(&repo, package_name)?;
     let mut commit_list: Vec<TagAndCommit> = vec![];
-    let mut index = 0;
+
     for commit_range in commit_range_list {
-        let tag = commit_range.latest_tag;
-        let start = commit_range.start;
-        let end = commit_range.end;
-
-        let end_is_first_commit = match end.parent(0) {
-            Err(_err) => true,
-            _ => false,
-        };
-
-        let mut revwalk = repo.revwalk().context(crate::ErrorKind::Git)?;
-        revwalk.push(start.id()).context(crate::ErrorKind::Git)?;
-        let revwalk = revwalk.filter_map(|id| repo.find_commit(id.ok()?).ok());
-
-        let mut commits = vec![];
-        for commit in revwalk {
-            if end.id() == commit.id() && !end_is_first_commit {
-                break;
-            }
-            let message = commit.message().ok_or(crate::ErrorKind::Git)?.to_string();
-
-            let hash = format!("{}", commit.id());
-            let author = commit.author().name().map(|name| name.to_owned());
-            let timestamp = commit.time().seconds();
-            let naive_datetime = NaiveDateTime::from_timestamp(timestamp, 0);
-            let datetime: DateTime<Utc> = DateTime::from_utc(naive_datetime, Utc);
-            commits.push(Commit {
-                message,
-                hash,
-                author,
-                datetime,
-            });
-        }
+        let tag = commit_range.clone().latest_tag;
+        // 根据 range 找到 commit
+        let commits = get_commit_list_by_commit_range(&repo, commit_range).unwrap();
 
         commit_list.insert(
-            index,
+            commit_list.len(),
             TagAndCommit {
                 tag,
                 commit_list: commits,
             },
         );
-        index = index + 1;
     }
 
     Ok(commit_list)

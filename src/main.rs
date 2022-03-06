@@ -1,11 +1,9 @@
 mod changelog;
 mod error;
 mod git;
-
+use changelog::Changelogs;
 use std::fs::{create_dir, File};
 use std::io::Write;
-
-use changelog::Changelogs;
 
 pub use crate::error::{Error, ErrorKind, Result};
 pub use crate::git::{latest_diff, Commit, Tag};
@@ -26,11 +24,17 @@ fn create_md_file(package: String, content: String) {
 }
 
 fn main() {
-    // let md_file_content_list =
-    //     Changelogs::new("C:/github/pro-components".to_string()).get_change_log_list();
-
+    // 只写入 latest
     let md_file_content_list =
-        Changelogs::new("C:/github/pro-components".to_string()).get_all_change_log();
+        Changelogs::new("C:/github/pro-components".to_string()).get_change_log_list();
+
+    for md_file_content in md_file_content_list {
+        create_md_file(md_file_content.package, md_file_content.content);
+    }
+
+    // 全部的 tag 写入
+    let md_file_content_list =
+        Changelogs::new("C:/github/pro-components".to_string()).get_all_change_log_list();
 
     for md_file_content in md_file_content_list {
         create_md_file(md_file_content.package, md_file_content.content);

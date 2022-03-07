@@ -13,14 +13,15 @@ pub struct TagAndVersion {
 /// A git tag.
 #[derive(Clone, Debug)]
 pub struct Tag {
-    name: Option<String>,
+    pub name: String,
+    pub date_time: String,
 }
 
 impl Tag {
     /// Access the tag name.
     #[inline]
     #[must_use]
-    pub fn name(&self) -> &Option<String> {
+    pub fn name(&self) -> &String {
         &self.name
     }
 }
@@ -176,7 +177,6 @@ pub fn get_commit_latest_range<'r>(
         1 => (tags.get(len - 1), None),
         _ => (tags.get(len - 1), tags.get(len - 2)),
     };
-
     // Value has to be `Some()` here.
     let start_str = start.expect("Tag should have a value.");
     let (start, end) = match (start_str, end) {
@@ -205,7 +205,17 @@ pub fn get_commit_latest_range<'r>(
             .peel_to_commit()
             .expect("There's no commit at the end point"),
         latest_tag: Tag {
-            name: Some((*start_str).to_owned()),
+            date_time: NaiveDateTime::from_timestamp(
+                start
+                    .peel_to_commit()
+                    .expect("There's no commit at the start point")
+                    .time()
+                    .seconds(),
+                0,
+            )
+            .format("%Y-%m-%d")
+            .to_string(),
+            name: ((*start_str).to_owned()),
         },
     };
 
@@ -270,7 +280,17 @@ pub fn get_all_tag_range<'r>(
                 .peel_to_commit()
                 .expect("There's no commit at the end point"),
             latest_tag: Tag {
-                name: Some((*start_str).to_owned()),
+                date_time: NaiveDateTime::from_timestamp(
+                    start
+                        .peel_to_commit()
+                        .expect("There's no commit at the start point")
+                        .time()
+                        .seconds(),
+                    0,
+                )
+                .format("%Y-%m-%d")
+                .to_string(),
+                name: ((*start_str).to_owned()),
             },
         };
         cr_list.insert(cr_list.len(), cr);

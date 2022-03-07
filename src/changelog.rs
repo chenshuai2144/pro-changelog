@@ -1,4 +1,4 @@
-﻿use crate::Commit;
+﻿use crate::{Commit, Tag};
 use git2::Repository;
 use regex::Regex;
 use reqwest::Client;
@@ -124,11 +124,11 @@ impl Changelogs {
         Ok(changelog_list)
     }
 
-    pub fn gen_change_log_to_md(&mut self, tag_name: &str, change_logs: Vec<String>) -> String {
+    pub fn gen_change_log_to_md(&mut self, tag: &Tag, change_logs: Vec<String>) -> String {
         let mut md_file_content: String = "".to_owned();
 
-        md_file_content.push_str(&("## ".to_owned() + tag_name + "\n\n"));
-
+        md_file_content.push_str(&("## ".to_owned() + tag.name.as_str() + "\n\n"));
+        md_file_content.push_str(format!("`{date_time}`\n\n", date_time = tag.date_time).as_str());
         for changelog in change_logs {
             // 格式化成这个样子
             //  * feat(layout): mix support headerContent render [@chenshuai2144](https://github.com/chenshuai2144)
@@ -158,15 +158,14 @@ impl Changelogs {
 
             let change_logs = self
                 .gen_change_log_by_commit_list(commit_list, package)
-                .unwrap();
+                .expect("生成changelog 失败，请重试");
 
             if change_logs.len() < 1 {
                 // 如果数量不够就直接退出
                 continue;
             }
 
-            let md_file_content =
-                self.gen_change_log_to_md(tag.name().as_ref().unwrap(), change_logs);
+            let md_file_content = self.gen_change_log_to_md(&tag, change_logs);
 
             md_packages.insert(
                 md_packages.len(),
@@ -212,8 +211,7 @@ impl Changelogs {
                     continue;
                 }
 
-                let md_file_content = self
-                    .gen_change_log_to_md(commit_and_tag.tag.name().as_ref().unwrap(), change_logs);
+                let md_file_content = self.gen_change_log_to_md(&commit_and_tag.tag, change_logs);
 
                 package_md.insert(package_md.len(), md_file_content);
             }

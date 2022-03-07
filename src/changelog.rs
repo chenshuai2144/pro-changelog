@@ -10,6 +10,7 @@ pub struct Changelogs {
     author_github_map: HashMap<String, String>,
     client: Client,
     github_html_url: String,
+    repo_name: String,
 }
 
 #[derive(Debug)]
@@ -21,6 +22,11 @@ pub struct MARKDOWN {
 #[derive(Deserialize)]
 struct GithubUser {
     login: String,
+}
+
+#[derive(Deserialize)]
+struct GithubPull {
+    user: GithubUser,
 }
 
 #[derive(Deserialize)]
@@ -36,8 +42,6 @@ impl Changelogs {
         let md_hash = commit.hash().trim();
         let short_md_hash = &md_hash[0..7];
 
-        let github_user_id = self.get_github_user_id(author);
-
         let re = Regex::new(r"\(#[0-9]*\)").unwrap();
 
         if re.is_match(message) {
@@ -47,7 +51,7 @@ impl Changelogs {
                 .index(0)
                 .replace("(", "")
                 .replace(")", "");
-
+            let github_user_id = self.get_pr_user_name(&pr_id, author);
             let pr_url = format!(
                 "{github_url}/pull/{pr_id}",
                 github_url = self.github_html_url,
@@ -72,11 +76,10 @@ impl Changelogs {
         );
 
         let md_message = format!(
-            "{message}. [{short_md_hash}]({commit_or_pr_url}) [@{github_user_id}](https://github.com/{github_user_id})",
+            "{message}. [{short_md_hash}]({commit_or_pr_url})",
             short_md_hash = short_md_hash,
             message = message,
             commit_or_pr_url = commit_or_pr_url,
-            github_user_id = github_user_id,
         );
 
         md_message
@@ -224,40 +227,37 @@ impl Changelogs {
         md_packages
     }
 
-    // 根据github的开放的 API 获取用户id
-    // 陈帅 -> chenshuai2144
-    pub fn get_github_user_id(&mut self, author: &str) -> String {
+    /**
+     * 通过pr的name 获取真实姓名，不让name 和 id 对不上
+     */
+    pub fn get_pr_user_name(&mut self, pr_number: &str, author: &str) -> String {
         if self.author_github_map.get(author).is_none() {
-            let mut map = HashMap::new();
-
-            map.insert("name", author);
-            let commit_url = "https://api.github.com/user";
-
-            // 从 github 获取他叫啥
-            let body: GithubUser = self
+            let pr_url = format!(
+                "{github_url}{repo_name}/pulls/{pr_number}",
+                github_url = " https://api.github.com/repos/",
+                pr_number = pr_number.replace("#", "").trim(),
+                repo_name = self.repo_name,
+            );
+            let body: GithubPull = self
                 .client
-                .get(commit_url)
+                .get(&pr_url)
                 .header(
                     "Authorization",
                     "token ".to_owned() + &env::var("GITHUB_TOKEN").unwrap(),
                 )
                 .header("Accept", "application/vnd.github.v3+json")
-                .json(&map)
                 .send()
                 .unwrap()
                 .json()
                 .unwrap();
 
-            println!("{},{}", author, body.login);
-            // 存到一个map里面，防止多次请求
             self.author_github_map
-                .insert(author.to_string(), body.login);
+                .insert(author.to_string(), body.user.login);
         }
 
         // 返回 map 里面对于 name 的映射
         self.author_github_map.get(author).unwrap().to_string()
     }
-
     /**
      * 初始化，需要添加项目的地址
      */
@@ -307,6 +307,7 @@ impl Changelogs {
             client: client,
             author_github_map: author_github_map,
             github_html_url: html_url,
+            repo_name: repo_name,
         }
     }
 }

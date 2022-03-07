@@ -248,6 +248,7 @@ impl Changelogs {
                 .json()
                 .unwrap();
 
+            println!("{},{}", author, body.login);
             // 存到一个map里面，防止多次请求
             self.author_github_map
                 .insert(author.to_string(), body.login);

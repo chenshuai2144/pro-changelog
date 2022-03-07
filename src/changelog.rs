@@ -3,8 +3,7 @@
 use reqwest::Client;
 use serde::Deserialize;
 
-use crate::{Commit, Tag};
-
+use crate::Commit;
 pub struct Changelogs {
     repo: String,
     author_github_map: HashMap<String, String>,

@@ -1,8 +1,13 @@
 mod changelog;
 mod error;
 mod git;
+mod npm;
+use std::io::{self, BufRead};
+use std::process::Command; // 引入命令模块
+
 use changelog::Changelogs;
-use std::fs::{create_dir, File};
+use npm::Npm;
+use std::fs::{self, create_dir, File};
 use std::io::Write;
 
 pub use crate::error::{Error, ErrorKind, Result};
@@ -24,19 +29,28 @@ fn create_md_file(package: String, content: String) {
 }
 
 fn main() {
-    // 只写入 latest
-    let md_file_content_list =
-        Changelogs::new("C:/github/pro-components".to_string()).get_change_log_list();
+    // fs::remove_file(".changelog").expect("删除文件失败");
+    // // 只写入 latest
+    // let md_file_content_list =
+    //     Changelogs::new("C:/github/pro-components".to_string()).get_change_log_list();
 
-    for md_file_content in md_file_content_list {
-        create_md_file(md_file_content.package, md_file_content.content);
-    }
+    // for md_file_content in md_file_content_list {
+    //     println!("-> 正在生成 {} 的 changelog", md_file_content.package);
+    //     create_md_file(md_file_content.package, md_file_content.content);
+    // }
+    // println!("{:?}", "🆗 生成完成。");
 
-    // 全部的 tag 写入
-    let md_file_content_list =
-        Changelogs::new("C:/github/pro-components".to_string()).get_all_change_log_list();
+    // // 全部的 tag 写入
+    // let md_file_content_list =
+    //     Changelogs::new("C:/github/pro-components".to_string()).get_all_change_log_list();
 
-    for md_file_content in md_file_content_list {
-        create_md_file(md_file_content.package, md_file_content.content);
-    }
+    // for md_file_content in md_file_content_list {
+    // println!("-> 正在生成 {} 的 changelog", md_file_content.package);
+    //     create_md_file(md_file_content.package, md_file_content.content);
+    // }
+    // println!("{:?}", "🆗 生成完成。");
+
+    let s = Npm::new("C:/github/pro-components".to_string()).check();
+
+    println!("{:?}", s);
 }

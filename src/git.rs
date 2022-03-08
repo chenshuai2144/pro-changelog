@@ -6,8 +6,8 @@ use std::str;
 
 #[derive(Clone, Debug)]
 pub struct TagAndVersion {
-    package: String,
-    version: String,
+    pub package: String,
+    pub version: String,
 }
 
 /// A git tag.
@@ -102,7 +102,7 @@ pub fn diff(repo: &Repository, o1: git2::Commit, o2: git2::Commit) -> crate::Res
 /**
  * 获取 tag 和 version
  */
-fn get_version(tag: &str) -> TagAndVersion {
+pub fn get_version(tag: &str) -> TagAndVersion {
     let package_list = tag.split('@').collect::<Vec<&str>>();
     let tag = TagAndVersion {
         package: "@".to_owned() + &package_list.get(1).unwrap().to_string(),
